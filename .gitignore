@@ -1,0 +1,45 @@
+# Solana/Anchor Build Artifacts
+.anchor
+.DS_Store
+target
+**/*.rs.bk
+*.pdb
+
+# Test keypairs and wallets
+test-ledger
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!Anchor.toml
+
+# Node
+node_modules
+dist
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+*.so
+*.o
+*.a
+
+# Solana
+.config/solana/cli/config.yml

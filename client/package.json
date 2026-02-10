@@ -1,0 +1,31 @@
+{
+  "name": "solana-guard-escrow-client",
+  "version": "0.1.0",
+  "description": "TypeScript client for SolanaGuard Escrow Protocol",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "cli": "node dist/cli.js",
+    "test": "echo 'Run tests with: anchor test'"
+  },
+  "keywords": [
+    "solana",
+    "escrow",
+    "blockchain",
+    "web3"
+  ],
+  "author": "Autonomous AI Agent",
+  "license": "MIT",
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.1",
+    "@solana/web3.js": "^1.95.0",
+    "commander": "^12.0.0",
+    "bn.js": "^5.2.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/bn.js": "^5.1.5",
+    "typescript": "^5.3.3"
+  }
+}
