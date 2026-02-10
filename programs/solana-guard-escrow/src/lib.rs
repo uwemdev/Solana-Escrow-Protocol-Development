@@ -13,7 +13,7 @@ declare_id!("11111111111111111111111111111111");
 pub mod solana_guard_escrow {
     use super::*;
 
-    /// Initialize a new escrow with specified parameters
+    // Creates a new escrow between buyer and seller
     pub fn initialize_escrow(
         ctx: Context<InitializeEscrow>,
         amount: u64,
@@ -22,16 +22,20 @@ pub mod solana_guard_escrow {
         let escrow = &mut ctx.accounts.escrow;
         let clock = Clock::get()?;
 
+        // Basic validation - amount and timeout must be positive
         require!(amount > 0, EscrowError::InvalidAmount);
         require!(timeout_period > 0, EscrowError::InvalidTimeout);
 
         escrow.buyer = ctx.accounts.buyer.key();
         escrow.seller = ctx.accounts.seller.key();
+        
+        // If arbiter is same as buyer, treat it as None (no arbiter)
         escrow.arbiter = if ctx.accounts.arbiter.key() == ctx.accounts.buyer.key() {
             None
         } else {
             Some(ctx.accounts.arbiter.key())
         };
+        
         escrow.amount = amount;
         escrow.created_at = clock.unix_timestamp;
         escrow.timeout_period = timeout_period;
@@ -70,7 +74,8 @@ pub mod solana_guard_escrow {
         Ok(())
     }
 
-    /// Release funds to seller (callable by buyer, arbiter, or seller after timeout)
+    // Release funds to the seller
+    // Buyer can do this anytime, seller only after timeout, arbiter anytime
     pub fn release_to_seller(ctx: Context<ReleaseToSeller>) -> Result<()> {
         let escrow = &mut ctx.accounts.escrow;
         let clock = Clock::get()?;
@@ -83,22 +88,22 @@ pub mod solana_guard_escrow {
         let caller = ctx.accounts.caller.key();
         let time_elapsed = clock.unix_timestamp - escrow.created_at;
 
-        // Authorization logic:
-        // 1. Buyer can always release
-        // 2. Arbiter can always release  
-        // 3. Seller can release only after timeout
+        // Who can release:
+        // - Buyer: always
+        // - Arbiter: always (if one exists)
+        // - Seller: only after the timeout period
         let is_authorized = caller == escrow.buyer
             || escrow.arbiter.map_or(false, |a| caller == a)
             || (caller == escrow.seller && time_elapsed >= escrow.timeout_period);
 
         require!(is_authorized, EscrowError::UnauthorizedOperation);
 
-        // Calculate transfer amount (escrow balance minus rent)
+        // Figure out how much we can transfer (need to keep rent in the account)
         let escrow_balance = ctx.accounts.escrow.to_account_info().lamports();
         let rent = Rent::get()?.minimum_balance(ctx.accounts.escrow.to_account_info().data_len());
         let transfer_amount = escrow_balance.saturating_sub(rent);
 
-        // Transfer funds from escrow PDA to seller
+        // Send it to the seller
         **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= transfer_amount;
         **ctx.accounts.seller.to_account_info().try_borrow_mut_lamports()? += transfer_amount;
 

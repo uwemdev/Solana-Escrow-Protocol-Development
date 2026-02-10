@@ -1,71 +1,43 @@
-# SolanaGuard Escrow Protocol
+# SolanaGuard Escrow
 
-A trustless peer-to-peer escrow protocol on Solana.
+A simple escrow protocol for Solana. Built this to learn Anchor and explore trustless P2P payments.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Solana](https://img.shields.io/badge/Solana-1.18-purple)](https://solana.com)
-[![Anchor](https://img.shields.io/badge/Anchor-0.30-blue)](https://anchor-lang.com)
+## What It Does
 
----
+Holds SOL in escrow between a buyer and seller. Funds are released when:
+- Buyer approves
+- Timeout expires (seller can claim after waiting)
+- Optional arbiter decides
 
-## Overview
+## Why I Built This
 
-SolanaGuard enables safe transactions between parties without requiring a trusted intermediary. Funds are held in a program-derived address (PDA) and released based on:
-- Buyer approval
-- Timeout expiration (seller can claim)
-- Arbiter decision (optional)
+Wanted to understand how escrow works on blockchain. Traditional escrow services charge 1-5% fees and take days. This costs ~$0.00025 per transaction and settles in under a second.
 
-### Features
+Also, good practice with PDAs and Anchor framework.
 
-- **Trustless**: No central authority controls funds
-- **Flexible**: Multiple release conditions
-- **Secure**: PDA-based storage, state machine validation
-- **Fast**: Sub-second finality on Solana
-- **Low cost**: ~$0.00025 per transaction
-
----
-
-## Installation
-
-### Prerequisites
-
-- Rust 1.75+
-- Solana CLI 1.18+
-- Anchor 0.30+
-- Node.js 18+
-
-### Setup
+## Quick Start
 
 ```bash
-# Clone repository
-git clone <repository-url>
+# Clone and build
+git clone <repo-url>
 cd solana-guard-escrow
-
-# Build program
 anchor build
-
-# Run tests
 anchor test
-
-# Install client dependencies
-cd client && npm install
 ```
 
----
-
-## Usage
-
-### CLI
+## Using the CLI
 
 ```bash
-cd client
-npm run build
+cd client && npm install && npm run build
 
-# Generate keypairs
+# Make some test wallets
 node dist/cli.js generate-keypair --output buyer.json
 node dist/cli.js generate-keypair --output seller.json
 
-# Create escrow
+# Get devnet SOL
+solana airdrop 2 $(solana address -k buyer.json) --url devnet
+
+# Create an escrow (1 SOL, 1 hour timeout)
 node dist/cli.js create \
   --buyer buyer.json \
   --seller <SELLER_PUBKEY> \
@@ -73,146 +45,122 @@ node dist/cli.js create \
   --timeout 3600 \
   --cluster devnet
 
-# Check status
+# Check what's happening
 node dist/cli.js status --escrow <ESCROW_PDA> --cluster devnet
 
-# Release to seller
+# Release the funds
 node dist/cli.js release --escrow <ESCROW_PDA> --keypair buyer.json --cluster devnet
 ```
 
-### TypeScript SDK
+## How It Works
+
+The program has 5 instructions:
+
+1. **initialize_escrow** - Creates the escrow account (PDA)
+2. **fund_escrow** - Buyer sends SOL to the escrow
+3. **release_to_seller** - Sends funds to seller
+4. **refund_to_buyer** - Sends funds back to buyer
+5. **cancel_escrow** - Cancels an unfunded escrow
+
+### State Flow
+
+```
+Created -> Funded -> Released/Refunded -> Closed
+     |         |
+     v         v
+  Cancelled -> Closed
+```
+
+## Architecture Notes
+
+**PDAs for Security**  
+Uses program-derived addresses so there's no private key to manage. The program itself controls the escrow account.
+
+**Timeout Logic**  
+If buyer ghosts, seller can claim after the timeout period. Prevents funds getting locked forever.
+
+**Optional Arbiter**  
+You can add a third party to resolve disputes. Or skip it if you trust the other party.
+
+## SDK Usage
 
 ```typescript
-import { Connection, Keypair } from '@solana/web3.js';
-import { Wallet, BN } from '@coral-xyz/anchor';
 import { EscrowClient } from './client/src';
 
-const connection = new Connection('https://api.devnet.solana.com');
-const wallet = new Wallet(buyerKeypair);
 const client = await EscrowClient.create(connection, wallet, programId);
 
 // Create escrow
 const { escrowPda } = await client.initializeEscrow({
   buyer: buyerKeypair.publicKey,
   seller: sellerPubkey,
-  amount: new BN(1_000_000_000),
-  timeoutPeriod: new BN(3600),
+  amount: new BN(1_000_000_000), // 1 SOL
+  timeoutPeriod: new BN(3600), // 1 hour
 });
 
-// Fund escrow
 await client.fundEscrow(escrowPda, buyerKeypair);
-
-// Release to seller
 await client.releaseToSeller(escrowPda, buyerKeypair);
 ```
 
----
-
-## Architecture
-
-### Instructions
-
-1. **initialize_escrow** - Create new escrow with PDA
-2. **fund_escrow** - Transfer SOL to escrow
-3. **release_to_seller** - Send funds to seller
-4. **refund_to_buyer** - Return funds to buyer
-5. **cancel_escrow** - Close unfunded escrow
-
-### State Machine
-
-```
-Created → Funded → Released
-    ↓         ↓         ↓
-    ↓         ↓    Refunded
-    ↓         ↓         ↓
-    → → → Cancelled → [Closed]
-```
-
-### Security
-
-- **PDA-based storage**: No private keys for escrow account
-- **State validation**: Enforced state transitions
-- **Authorization checks**: Role-based access control
-- **Rent protection**: Automatic balance preservation
-
----
-
 ## Deployment
 
-### Build
-
 ```bash
 anchor build
-```
 
-### Deploy to Devnet
-
-```bash
-# Get program ID
+# Get your program ID
 solana address -k target/deploy/solana_guard_escrow-keypair.json
 
-# Update program ID in:
-# - programs/solana-guard-escrow/src/lib.rs
-# - Anchor.toml
-
-# Rebuild and deploy
+# Update it in lib.rs and Anchor.toml, then rebuild
 anchor build
+
+# Deploy to devnet
 anchor deploy --provider.cluster devnet
 ```
 
-See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for detailed instructions.
-
----
+See [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for more details.
 
 ## Testing
 
 ```bash
-# Run all tests
 anchor test
-
-# Test on devnet
-anchor test --skip-deploy --provider.cluster devnet
 ```
 
-The test suite includes:
-- Escrow initialization
-- Funding mechanics
-- Release authorization paths
-- Refund flows
-- Cancellation logic
-- Edge cases and error handling
+Tests cover:
+- Creating and funding escrows
+- Different release scenarios (buyer, seller after timeout, arbiter)
+- Refunds
+- Cancellations
+- Edge cases
 
----
+## Potential Use Cases
 
-## Documentation
+- Freelance payments
+- NFT sales
+- P2P trading
+- Anything where you need trustless escrow
 
-- **[Architecture](./docs/ARCHITECTURE.md)** - Technical deep dive
-- **[Deployment](./docs/DEPLOYMENT.md)** - Step-by-step deployment guide
+## Known Issues
 
----
+- Only supports SOL (no SPL tokens yet)
+- No partial releases
+- Arbiter can't be changed after creation
+- Basic timeout implementation
 
-## Use Cases
-
-- Freelance marketplace payments
-- P2P trading platforms
-- International remittances
-- NFT sales with buyer protection
-- Milestone-based project payments
-
----
+Maybe I'll add these later if people actually use this.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
----
+Feel free to fork and improve. PRs welcome.
 
 ## License
 
-MIT License - see [LICENSE](./LICENSE) for details
+MIT
+
+## Tech Stack
+
+- [Solana](https://solana.com)
+- [Anchor Framework](https://anchor-lang.com)
+- TypeScript for the client
 
 ---
 
-## Acknowledgments
-
-Built with [Solana](https://solana.com), [Anchor](https://anchor-lang.com), and [TypeScript](https://www.typescriptlang.org/)
+Built while learning Solana development. Probably has bugs. Use at your own risk.
